@@ -1,4 +1,12 @@
 #include "systemcalls.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 /**
  * @param cmd the command to execute with system()
@@ -17,7 +25,9 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+int status = system(cmd);
+    return WIFEXITED(status) && (WEXITSTATUS(status) == 0);
+    //return true;
 }
 
 /**
@@ -58,10 +68,26 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid = fork();
 
-    va_end(args);
+    if (pid == -1) {
+        perror("Fork failed");
+        va_end(args);
+        return false;
+    }
+    
+    if (pid == 0) { // Child process
+        execv(command[0], command);
+        perror("Execv failed");
+        exit(EXIT_FAILURE);
+    } else { // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        va_end(args);
 
-    return true;
+      return WIFEXITED(status) && (WEXITSTATUS(status) == 0);
+    }
+ 
 }
 
 /**
@@ -92,8 +118,26 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    pid_t pid = fork();
 
-    va_end(args);
+    if (pid == -1) {
+        perror("Fork failed");
+        va_end(args);
+        return false;
+    }
 
-    return true;
+    if (pid == 0) { // Child process
+        // Redirect stdout to the specified file
+        freopen(outputfile, "w", stdout);
+
+        execv(command[0], command);
+        perror("Execv failed");
+        exit(EXIT_FAILURE);
+    } else { // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        va_end(args);
+
+        return WIFEXITED(status) && (WEXITSTATUS(status) == 0);
+    }
 }
